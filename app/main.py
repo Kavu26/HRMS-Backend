@@ -197,13 +197,39 @@ def get_attendance(attendance_id: str, db: Session = Depends(get_db)):
     return attendance
 
 @app.put("/api/attendance/{attendance_id}", response_model=schemas.AttendanceResponse)
-def update_attendance(attendance_id: str, attendance_update: schemas.AttendanceUpdate, db: Session = Depends(get_db)):
+def update_attendance(
+    attendance_id: str, 
+    attendance_update: schemas.AttendanceUpdate,
+    db: Session = Depends(get_db)
+):
     attendance = db.query(models.Attendance).filter(models.Attendance.id == attendance_id).first()
     if not attendance:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Attendance record with ID '{attendance_id}' not found"
         )
+    
+    # Parse date string to date object if provided
+    update_date = None
+    if attendance_update.date:
+        try:
+            update_date = date.fromisoformat(attendance_update.date)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid date format. Expected YYYY-MM-DD"
+            )
+    
+    # Parse status string to enum if provided
+    update_status = None
+    if attendance_update.status:
+        try:
+            update_status = models.AttendanceStatus(attendance_update.status)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Must be 'Present' or 'Absent'"
+            )
     
     # Check if employee exists if employee_id is being updated
     if attendance_update.employee_id and attendance_update.employee_id != attendance.employee_id:
@@ -215,7 +241,7 @@ def update_attendance(attendance_id: str, attendance_update: schemas.AttendanceU
             )
         
         # Check for duplicate attendance for the new employee and date
-        new_date = attendance_update.date if attendance_update.date else attendance.date
+        new_date = update_date if update_date else attendance.date
         existing_attendance = db.query(models.Attendance).filter(
             models.Attendance.employee_id == attendance_update.employee_id,
             models.Attendance.date == new_date,
@@ -229,27 +255,27 @@ def update_attendance(attendance_id: str, attendance_update: schemas.AttendanceU
             )
     
     # Check for duplicate if date is being changed
-    if attendance_update.date and attendance_update.date != attendance.date:
+    if update_date and update_date != attendance.date:
         check_employee_id = attendance_update.employee_id if attendance_update.employee_id else attendance.employee_id
         existing_attendance = db.query(models.Attendance).filter(
             models.Attendance.employee_id == check_employee_id,
-            models.Attendance.date == attendance_update.date,
+            models.Attendance.date == update_date,
             models.Attendance.id != attendance_id
         ).first()
         
         if existing_attendance:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Attendance for employee '{check_employee_id}' on date '{attendance_update.date}' already exists"
+                detail=f"Attendance for employee '{check_employee_id}' on date '{update_date}' already exists"
             )
     
     # Update fields
     if attendance_update.employee_id is not None:
         attendance.employee_id = attendance_update.employee_id
-    if attendance_update.date is not None:
-        attendance.date = attendance_update.date
-    if attendance_update.status is not None:
-        attendance.status = attendance_update.status
+    if update_date is not None:
+        attendance.date = update_date
+    if update_status is not None:
+        attendance.status = update_status
     
     try:
         db.commit()

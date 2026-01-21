@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import date
-from typing import Optional
+from typing import Optional, Union
 from app.models import AttendanceStatus
 
 class EmployeeBase(BaseModel):
@@ -26,8 +26,8 @@ class AttendanceCreate(AttendanceBase):
 
 class AttendanceUpdate(BaseModel):
     employee_id: Optional[str] = None
-    date: Optional[date] = None
-    status: Optional[AttendanceStatus] = None
+    date: Optional[str] = None
+    status: Optional[str] = None
 
 class AttendanceResponse(AttendanceBase):
     id: str
